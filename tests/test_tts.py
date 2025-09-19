@@ -2,9 +2,11 @@
 Test Text-to-Speech output via AudioController.
 """
 
+import sys, os
+# Add parent directory (project root) to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from audio_controller import AudioController
 
-if __name__ == "__main__":
-    audio = AudioController()
-    print("[TEST] Speaking test message...")
-    audio.speak("Hello, this is a Buddy Core TTS test")
+tts = AudioController()
+tts.speak("This is a test of Buddy Core audio system. Hearing this voice means that Buddy Core is using text-to-speech from Piper TTS")
