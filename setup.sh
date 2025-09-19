@@ -1,88 +1,70 @@
 #!/bin/bash
+# setup.sh - Setup environment for Buddy Core on Raspberry Pi
+
 set -e
 
-echo "[BuddyCore Setup] Starting setup..."
+echo "=== Buddy Core Setup Starting ==="
 
-# ---------------------------
-# System update
-# ---------------------------
-echo "[BuddyCore Setup] Updating system..."
+# 1. Update system packages
 sudo apt update && sudo apt upgrade -y
 
-# ---------------------------
-# Install dependencies
-# ---------------------------
-echo "[BuddyCore Setup] Installing dependencies..."
-sudo apt install -y python3 python3-pip python3-venv git wget \
-    portaudio19-dev pulseaudio alsa-utils sox \
-    piper docker.io
+# 2. Install essential packages
+sudo apt install -y \
+    python3-venv python3-pip \
+    libatlas-base-dev libopenjp2-7-dev libjpeg-dev \
+    libfreetype6-dev libpng-dev \
+    bluez pulseaudio alsa-utils \
+    libasound2-dev \
+    cmake git wget unzip curl \
+    rpi-eeprom-update \
+    ffmpeg \
+    libcap-dev
 
-# ---------------------------
-# Python virtual environment
-# ---------------------------
-echo "[BuddyCore Setup] Creating Python venv..."
-python3 -m venv venv
-source venv/bin/activate
+# 3. Install libcamera apps for Raspberry Pi Camera Module 3
+sudo apt install -y libcamera-apps
+
+# 4. Create Python virtual environment
+python3 -m venv ~/buddycore/venv
+source ~/buddycore/venv/bin/activate
+
+# 5. Upgrade pip
 pip install --upgrade pip
-pip install opencv-python numpy tflite-runtime requests
 
-# ---------------------------
-# Piper TTS model
-# ---------------------------
-echo "[BuddyCore Setup] Setting up Piper TTS model..."
-MODEL_DIR="models/piper_models"
-MODEL_NAME="en_US-hfc_female-medium"
-MODEL_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_female-medium"
+# 6. Install Python packages
+pip install --upgrade numpy opencv-python tflite-runtime requests
 
-mkdir -p $MODEL_DIR
+# 7. Install Piper TTS
+pip install piper-tts
 
-if [ ! -f "$MODEL_DIR/$MODEL_NAME.onnx" ]; then
-  echo "[BuddyCore Setup] Downloading Piper ONNX model..."
-  wget -O "$MODEL_DIR/$MODEL_NAME.onnx" \
-    "$MODEL_URL/$MODEL_NAME.onnx"
-fi
+# 8. Test Piper installation
+echo "Testing Piper TTS..."
+python3 -c "import piper_tts; print('Piper TTS installed successfully')"
 
-if [ ! -f "$MODEL_DIR/$MODEL_NAME.onnx.json" ]; then
-  echo "[BuddyCore Setup] Downloading Piper JSON metadata..."
-  wget -O "$MODEL_DIR/$MODEL_NAME.onnx.json" \
-    "$MODEL_URL/$MODEL_NAME.onnx.json"
-fi
+# 9. Bluetooth & PulseAudio setup
+echo "Configuring Bluetooth speaker and PulseAudio..."
+# Make sure your speaker is paired manually before running Buddy Core
 
-# ---------------------------
-# Systemd service
-# ---------------------------
-echo "[BuddyCore Setup] Installing systemd service..."
-SERVICE_FILE="/etc/systemd/system/buddy_core.service"
-
-sudo bash -c "cat > $SERVICE_FILE" <<EOL
+# 10. Create systemd service for Buddy Core
+echo "Creating systemd service..."
+sudo tee /etc/systemd/system/buddy_core.service > /dev/null <<EOF
 [Unit]
 Description=Buddy Core Service
 After=network.target
 
 [Service]
 Type=simple
-User=$USER
-WorkingDirectory=$(pwd)
-ExecStart=$(pwd)/venv/bin/python3 main.py
-Restart=on-failure
+User=pi
+WorkingDirectory=/home/pi/buddycore
+ExecStart=/home/pi/buddycore/venv/bin/python3 /home/pi/buddycore/main.py
+Restart=always
 
 [Install]
 WantedBy=multi-user.target
-EOL
+EOF
 
-# ---------------------------
-# Enable + start service
-# ---------------------------
-echo "[BuddyCore Setup] Enabling Buddy Core service..."
+# 11. Enable service
 sudo systemctl daemon-reload
 sudo systemctl enable buddy_core.service
-sudo systemctl start buddy_core.service
 
-# ---------------------------
-# Voice confirmation
-# ---------------------------
-echo "[BuddyCore Setup] Speaking startup confirmation..."
-echo "Buddy Core started" | piper --model "$MODEL_DIR/$MODEL_NAME.onnx" --output-raw | aplay -r 22050 -f S16_LE -t raw -
-
-echo "[BuddyCore Setup] Finished!"
-echo "[BuddyCore Setup] Buddy Core should now auto-start on boot."
+echo "=== Buddy Core Setup Complete ==="
+echo "You can start the service with: sudo systemctl start buddy_core"
