@@ -7,12 +7,20 @@ class CameraManager:
     Handles Raspberry Pi Camera Module 3 via Picamera2.
     Provides frames as OpenCV-compatible BGR numpy arrays.
     """
-    def __init__(self):
+
+    def __init__(self, resolution="full"):
+        from picamera2 import Picamera2
         self.picam2 = Picamera2()
-        config = self.picam2.create_still_configuration()
+
+        if resolution == "full":
+            config = self.picam2.create_preview_configuration(main={"size": self.picam2.sensor_resolution})
+        else:
+            # default to 640x480
+            config = self.picam2.create_preview_configuration(main={"size": (640, 480)})
+
         self.picam2.configure(config)
         self.picam2.start()
-        print("Camera initialized")
+
 
     def get_frame(self):
         """

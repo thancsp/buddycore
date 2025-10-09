@@ -1,83 +1,101 @@
-# tests/test_object_detector.py
-import sys
+"""
+Buddy Core - Test Detector Module
+Captures a full-resolution frame, runs YOLOv11 ONNX detection, announces detected objects via Piper TTS,
+and displays the annotated image for 15 seconds.
+"""
+
 import os
-import subprocess
-import cv2
-from datetime import datetime
-from threading import Thread
+import sys
 import time
+import threading
+import subprocess  # For running external commands like xdg-open or feh
+import cv2         # OpenCV for image saving and manipulation
+from picamera2 import Picamera2  # Picamera2 for Raspberry Pi camera control
+from ultralytics import YOLO      # YOLOv11 ONNX detection
 
-# Ensure Buddy Core modules can be imported
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from camera_manager import CameraManager
-# from object_detector import ObjectDetector  # Uncomment when you have a model
+# 🔧 Add Buddy Core root to Python path
+# Allows importing local modules like AudioController
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from audio_controller import AudioController  # TTS handler
 
-# Set display for desktop if running via Pi Connect
-if not os.environ.get("DISPLAY"):
-    os.environ["DISPLAY"] = ":0"  # Adjust if your desktop uses a different display
+# === Output file and YOLO model path ===
+OUTPUT_FILE = "test_detector.jpg"
+MODEL_PATH = "models/yolo11/yolo11n.onnx"
 
-def speak(text):
-    """
-    Use Piper TTS to speak a given text via aplay concurrently.
-    Ensures the first word is not cut off.
-    """
-    def run_piper(tts_text):
-        model_path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
-                                  "models/piper_models/en_US-hfc_female-medium.onnx")
+# Load YOLOv11 ONNX model for object detection
+print("🔄 Loading YOLOv11 ONNX model...")
+model = YOLO(MODEL_PATH, task="detect")  # task="detect" ensures detection mode
+print("✅ Model loaded successfully")
+
+# === Initialize camera for full wide-screen capture ===
+picam2 = Picamera2()
+# Full-resolution wide-frame (example: 4603x2592)
+picam2.configure(picam2.create_still_configuration(main={"size": (4603, 2592)}))
+picam2.start()
+time.sleep(1)  # Allow sensor to warm up
+frame = picam2.capture_array()  # Capture image as numpy array
+picam2.close()
+print("✅ Captured full-frame wide image using Picamera2")
+
+# === Run YOLO detection on captured frame ===
+results = model.predict(source=frame, save=False, show=False)  # Run detection
+annotated_frame = results[0].plot()  # Draw bounding boxes on image
+cv2.imwrite(OUTPUT_FILE, annotated_frame)  # Save annotated image
+print(f"✅ Detection complete. Saved as {OUTPUT_FILE}")
+
+# === Extract detected object names ===
+names = results[0].names  # Class names dictionary
+detected = [names[int(cls)] for cls in results[0].boxes.cls] if len(results[0].boxes) > 0 else []
+
+# Prepare TTS message based on detection
+if detected:
+    detected_str = ", ".join(set(detected))  # Unique detected objects
+    tts_text = (f"Buddy Core has detected the following objects: {detected_str}. ")
+else:
+    tts_text = ("Buddy Core has finished testing object detection. "
+                "No recognizable objects were found.")
+
+# === Display the image for 15 seconds ===
+def show_image():
+    """Open captured image automatically depending on environment"""
+    image_path = os.path.abspath(OUTPUT_FILE)
+    print(f"🖼️ Attempting to display image: {image_path}")
+
+    if os.environ.get("DISPLAY"):
+        # Desktop environment available, use default image viewer
         try:
-            piper = subprocess.Popen(
-                ["piper", "--model", model_path, "--output-raw"],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE
-            )
-            aplay = subprocess.Popen(
-                ["aplay", "-f", "S16_LE", "-r", "22050", "-c", "1"],
-                stdin=piper.stdout
-            )
-            time.sleep(0.1)  # Give Piper a moment to initialize
-            piper.stdin.write((" " + tts_text).encode())
-            piper.stdin.flush()
-            piper.stdin.close()
-            aplay.wait()
+            subprocess.run(["xdg-open", image_path])
         except Exception as e:
-            print(f"❌ Piper TTS error: {e}")
-
-    Thread(target=run_piper, args=(text,), daemon=True).start()
-
-def main():
-    cam = CameraManager()
-    frame = cam.get_frame()
-
-    if frame is not None:
-        # Add timestamp overlay
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        labeled_frame = frame.copy()
-        label_text = f"Buddy Core Object Detector Test - {timestamp}"
-        cv2.putText(labeled_frame, label_text, (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-
-        # Save image with fixed filename
-        filename = "test_detector.jpg"
-        cv2.imwrite(filename, labeled_frame)
-        print(f"✅ Frame captured and saved as {filename}")
-
-        # TTS message
-        tts_text = (
-            "Buddy Core has finished testing object_detector.py. "
-            "No model is currently loaded, so no objects were detected. "
-            "A test image has been created in the Buddy Core root directory. "
-            "It will be closed automatically."
-        )
-        speak(tts_text)
-
-        # Show image on desktop if available
-        if os.environ.get("DISPLAY"):
-            cv2.imshow("Buddy Core Object Detector Test", labeled_frame)
-            cv2.waitKey(15000)
-            cv2.destroyAllWindows()
+            print(f"⚠️ Could not open image with xdg-open: {e}")
     else:
-        print("❌ Failed to capture frame")
-        speak("Buddy Core failed to capture a frame during test_object_detector.py.")
+        # Headless: try feh if installed
+        if subprocess.run(["which", "feh"], capture_output=True).returncode == 0:
+            try:
+                subprocess.run(["feh", "-F", "-t", "-Y", image_path])
+            except Exception as e:
+                print(f"⚠️ Could not open image with feh: {e}")
+        else:
+            print("⚠️ No DISPLAY or feh available. Skipping image display.")
+            return
 
-if __name__ == "__main__":
-    main()
+    # Keep displayed for 15 seconds
+    time.sleep(15)
+    # Close the image automatically after 15 seconds
+    subprocess.run(["pkill", "-f", OUTPUT_FILE])
+
+# === Speak detection results using Piper TTS concurrently ===
+def speak_message():
+    """Announce detected objects via TTS"""
+    time.sleep(0.1)  # Small delay to avoid cutting off first word
+    print(f"🔊 Speaking: {tts_text}")
+    AudioController().speak(tts_text)
+
+# === Run TTS and image display concurrently ===
+t1 = threading.Thread(target=speak_message)
+t2 = threading.Thread(target=show_image)
+t1.start()
+t2.start()
+t1.join()
+t2.join()
+
+print("✅ test_detector.py completed successfully")
