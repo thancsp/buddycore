@@ -1,43 +1,151 @@
-"""
-Object Detector: uses TensorFlow Lite SSD model for object detection.
-"""
+# object_detector.py
+# ==================
+# Buddy Core Object Detector using YOLOv11 ONNX
+# -------------------------------------------------
+# Provides object detection on frames captured from CameraManager
+# and optional TTS announcements using AudioController.
+#
+# === Methods Summary ===
+# - __init__(): Initializes YOLO model, camera, and output file path.
+# - detect_frame(): Captures a frame, runs YOLO detection, annotates, and saves image.
+# - speak_detections(detected_labels): Announces detected objects via TTS.
+# - run_detection_test(): Full detection test that captures frame, detects, displays, and speaks results.
+#
+# === Instance Variables ===
+# - self.model: YOLOv11 ONNX detection model.
+# - self.cam: CameraManager instance for capturing frames.
+# - self.output_file: Filename for saving annotated detection image.
 
+import os
 import cv2
-import numpy as np
-import tflite_runtime.interpreter as tflite
-from config import MODEL_PATH, LABELS_PATH, CONFIDENCE_THRESHOLD
+import time
+import threading
+import subprocess
+from ultralytics import YOLO  # YOLOv11 ONNX detection
+
+from config import CAMERA_RESOLUTION, DETECTOR_TEST_FILENAME, YOLO_MODEL_PATH
+from audio_controller import AudioController
+from camera_manager import CameraManager
+
 
 class ObjectDetector:
+    """
+    Handles YOLOv11 object detection for Buddy Core.
+    """
+
     def __init__(self):
-        self.interpreter = tflite.Interpreter(model_path=MODEL_PATH)
-        self.interpreter.allocate_tensors()
+        # 🔹 Load YOLOv11 ONNX model from the path specified in config
+        print(f"🔄 Loading YOLOv11 ONNX model from {YOLO_MODEL_PATH}...")
+        self.model = YOLO(YOLO_MODEL_PATH, task="detect")  # task="detect" ensures detection mode
+        print("✅ YOLOv11 model loaded successfully")
 
-        with open(LABELS_PATH, "r") as f:
-            self.labels = [line.strip() for line in f.readlines()]
+        # 🔹 Initialize CameraManager with resolution from config
+        try:
+            self.cam = CameraManager(resolution=CAMERA_RESOLUTION)
+        except Exception as e:
+            print(f"❌ Failed to initialize camera: {e}")
+            self.cam = None  # Mark camera as unavailable if init fails
 
-        self.input_details = self.interpreter.get_input_details()
-        self.output_details = self.interpreter.get_output_details()
+        # 🔹 Set output file for annotated detection image
+        self.output_file = DETECTOR_TEST_FILENAME
 
-    def detect(self, frame):
-        h, w, _ = frame.shape
-        input_shape = self.input_details[0]["shape"]
-        resized = cv2.resize(frame, (input_shape[2], input_shape[1]))
-        input_data = np.expand_dims(resized, axis=0)
+    def detect_frame(self):
+        """
+        Capture a frame, run YOLOv11 detection, annotate it, and save.
+        
+        Returns:
+            annotated_frame (numpy array): Frame with bounding boxes drawn
+            detected_labels (list of str): Names of detected objects
+        """
+        # 🔹 Ensure camera is available
+        if not self.cam:
+            print("❌ Camera not available.")
+            return None, []
 
-        self.interpreter.set_tensor(self.input_details[0]["index"], input_data)
-        self.interpreter.invoke()
+        # 🔹 Capture a frame from the camera
+        frame = self.cam.get_frame()
+        if frame is None:
+            print("❌ Failed to capture frame")
+            return None, []
 
-        boxes = self.interpreter.get_tensor(self.output_details[0]["index"])[0]
-        classes = self.interpreter.get_tensor(self.output_details[1]["index"])[0]
-        scores = self.interpreter.get_tensor(self.output_details[2]["index"])[0]
+        # 🔹 Run YOLOv11 detection on the captured frame
+        results = self.model.predict(source=frame, save=False, show=False)
+        annotated_frame = results[0].plot()  # Draw bounding boxes
+        cv2.imwrite(self.output_file, annotated_frame)  # Save annotated frame to file
 
-        detections = []
-        for i, score in enumerate(scores):
-            if score >= CONFIDENCE_THRESHOLD:
-                ymin, xmin, ymax, xmax = boxes[i]
-                detections.append({
-                    "label": self.labels[int(classes[i])],
-                    "score": float(score),
-                    "box": (xmin, ymin, xmax, ymax)
-                })
-        return detections
+        # 🔹 Extract detected object names from the YOLO result
+        names = results[0].names
+        detected_labels = [names[int(cls)] for cls in results[0].boxes.cls] if len(results[0].boxes) > 0 else []
+
+        print(f"✅ Detection complete. Saved as {self.output_file}")
+        return annotated_frame, detected_labels
+
+    def speak_detections(self, detected_labels):
+        """
+        Announce detected objects via AudioController (Piper TTS).
+        
+        Args:
+            detected_labels (list of str): List of detected object names
+        """
+        # 🔹 Prepare TTS message based on detection results
+        if detected_labels:
+            detected_str = ", ".join(set(detected_labels))  # List unique objects
+            tts_text = f"Buddy Core has detected the following objects: {detected_str}."
+        else:
+            tts_text = "Buddy Core has finished object detection. No recognizable objects were found."
+
+        # 🔹 Run TTS in background thread to avoid blocking main program
+        def tts_thread():
+            AudioController().speak(tts_text)
+
+        threading.Thread(target=tts_thread, daemon=True).start()
+
+    def run_detection_test(self):
+        """
+        Full detection test:
+        1. Capture a frame
+        2. Run YOLO detection
+        3. Annotate and save image
+        4. Display image
+        5. Announce detections via TTS
+        """
+        # 🔹 Detect objects in a frame
+        annotated_frame, detected = self.detect_frame()
+        if annotated_frame is None:
+            return  # Stop if capture failed
+
+        # 🔹 Display image (desktop environment or headless fallback)
+        def show_image():
+            image_path = os.path.abspath(self.output_file)
+            print(f"🖼️ Attempting to display image: {image_path}")
+            try:
+                # If desktop DISPLAY available, use OpenCV
+                if os.environ.get("DISPLAY"):
+                    cv2.imshow("Buddy Core Object Detection", annotated_frame)
+                    cv2.waitKey(15000)  # Display for 15 seconds
+                    cv2.destroyAllWindows()
+                # Headless: try 'feh' image viewer if installed
+                elif subprocess.run(["which", "feh"], capture_output=True).returncode == 0:
+                    subprocess.run(["feh", "-F", "-t", "-Y", image_path])
+                    time.sleep(15)
+                    subprocess.run(["pkill", "-f", self.output_file])
+                else:
+                    print("⚠️ No DISPLAY or feh available. Skipping image display.")
+            except Exception as e:
+                print(f"⚠️ Failed to display image: {e}")
+
+        # 🔹 Run TTS and image display concurrently
+        t1 = threading.Thread(target=self.speak_detections, args=(detected,))
+        t2 = threading.Thread(target=show_image)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        print("✅ Object detection test completed successfully")
+
+
+# 🔹 Example usage
+if __name__ == "__main__":
+    detector = ObjectDetector()
+    detector.run_detection_test()
