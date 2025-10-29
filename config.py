@@ -69,7 +69,7 @@ PORCUPINE_KEYWORD_PATH = PORCUPINE_MODEL_PATH / "Hey-buddy_en_raspberry-pi_v3_0_
 WAKEWORD_SAMPLE_RATE = 16000  # Hz
 WAKEWORD_CHANNELS = 1         # Mono
 
-EXIT_PHRASES = ["shut down", "system shut down"]
+EXIT_PHRASES = ["shut down", "system shutdown", "system shut down"]
 
 # ------------------------------------------------------------
 # SPEECH-TO-TEXT (STT) SETTINGS

@@ -144,7 +144,7 @@ def main():
                     print("⚠️ Buddy Core couldn't detect anything right now.")
                     audio.speak(f"Buddy Core couldn't detect anything")
                 else:
-                    audio.speak(f"{detected} in front of you.")
+                    audio.speak(f"The following objects are detected in front of you: {detected}")
 
         # Detection logic every DETECTION_INTERVAL
         annotated_frame, detected = detector.detect_frame()
