@@ -51,8 +51,8 @@ AUDIO_DEVICE_INDEX = None  # default device for playback
 # ------------------------------------------------------------
 YOLO_MODEL_PATH = MODELS_DIR / "yolo11" / "yolo11n.onnx"
 DETECTION_CONFIDENCE = 0.5
-DETECTION_CLASSES = ["person", "bicycle", "car", "bus", "truck"]
-
+HARZARDOUS_OBJECTS = ["person", "bicycle", "car", "bus", "truck"]
+DETECTION_INTERVAL = 10# seconds interval of how often the main program's detector function will detect with the camera
 # Detector test settings
 DETECTOR_TEST_FILENAME = BASE_DIR / "test_detector.jpg"
 DETECTOR_DISPLAY_SEC = 15  # seconds to show annotated image
@@ -69,14 +69,14 @@ PORCUPINE_KEYWORD_PATH = PORCUPINE_MODEL_PATH / "Hey-buddy_en_raspberry-pi_v3_0_
 WAKEWORD_SAMPLE_RATE = 16000  # Hz
 WAKEWORD_CHANNELS = 1         # Mono
 
-EXIT_PHRASES = ["shut down", "abort testing"]
+EXIT_PHRASES = ["shut down", "system shut down"]
 
 # ------------------------------------------------------------
 # SPEECH-TO-TEXT (STT) SETTINGS
 # ------------------------------------------------------------
 STT_SAMPLE_RATE = 16000   # Hz
 STT_CHANNELS = 1          # Mono audio input
-STT_DURATION = 7          # Seconds to record for STT test
+STT_DURATION = 3          # Seconds to record for STT test
 STT_MODEL_NAME = "base"   # Whisper model size ("tiny", "small", "base", "medium", "large")
 
 # Beep signals for start/end of recording

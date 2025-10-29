@@ -2,7 +2,7 @@
 # ====================
 # Buddy Core - Single Detection Wake Word Listener using Porcupine
 # -------------------------------------------------
-# Listens once for the configured wake word and announces detection via Piper TTS.
+# Listens for the configured wake word and provides detection feedback.
 
 import queue
 import numpy as np
@@ -21,27 +21,20 @@ from config import (
 
 class WakeWordListener:
     """
-    Listens for a single occurrence of the wake word using Porcupine.
-    
+    Listens for wake word using Porcupine.
+
     Methods
     -------
-    speak_alert():
-        Announces wake word detection via TTS.
-    audio_callback(indata, frames, time_info, status):
-        Collects audio samples from microphone and queues them.
-    run_once():
-        Listens until wake word is detected once, announces it, and quits.
-    detected():
-        Returns True if the wake word is detected once (used for external scripts).
-
-    Variables
-    ---------
-    audio : AudioController
-        Handles text-to-speech output.
-    audio_queue : queue.Queue
-        Thread-safe queue to store incoming microphone audio frames.
-    porcupine : pvporcupine.Porcupine
-        Porcupine engine instance for wake word detection.
+    speak_alert()
+        Announces wake word via TTS.
+    audio_callback(indata, frames, time_info, status)
+        Queues incoming audio frames.
+    run_once()
+        Blocks until wake word detected once.
+    detected()
+        Blocks until wake word is detected, returns True, no TTS.
+    detected_nonblocking(timeout)
+        Checks for wake word in non-blocking mode (returns True/False).
     """
 
     def __init__(self, audio_controller=None):
@@ -50,6 +43,8 @@ class WakeWordListener:
         self.audio = audio_controller if audio_controller else AudioController()
         self.audio_queue = queue.Queue()
         self.porcupine = None
+        self.buffer = np.zeros((0,), dtype=np.int16)
+        self.stream = None
 
     def speak_alert(self):
         """Announce wake word detection via TTS."""
@@ -68,9 +63,7 @@ class WakeWordListener:
 
     def run_once(self):
         """
-        Start Porcupine engine and listen for wake word once.
-        Prints progress at each step and announces detection via TTS.
-        Exits after a single detection.
+        Blocking call: listens for wake word once, speaks alert, and returns.
         """
         print(f"🎧 Setting up Porcupine for wake word '{WAKEWORD_TRIGGER}'...")
         self.porcupine = pvporcupine.create(
@@ -79,7 +72,6 @@ class WakeWordListener:
         )
         frame_length = self.porcupine.frame_length
         print("✅ Porcupine initialized successfully")
-        print("🎤 Opening microphone stream...")
 
         with sd.InputStream(
             samplerate=WAKEWORD_SAMPLE_RATE,
@@ -88,8 +80,7 @@ class WakeWordListener:
             channels=WAKEWORD_CHANNELS,
             callback=self.audio_callback
         ):
-            print("🎙️ Listening for wake word... (will exit after detection)")
-            buffer = np.zeros((0,), dtype=np.int16)
+            print("🎙️ Listening for wake word... (blocking)")
             detected = False
 
             while not detected:
@@ -99,11 +90,11 @@ class WakeWordListener:
                     continue
 
                 audio_data = (data.flatten() * 32768).astype(np.int16)
-                buffer = np.concatenate((buffer, audio_data))
+                self.buffer = np.concatenate((self.buffer, audio_data))
 
-                while len(buffer) >= frame_length:
-                    frame = buffer[:frame_length]
-                    buffer = buffer[frame_length:]
+                while len(self.buffer) >= frame_length:
+                    frame = self.buffer[:frame_length]
+                    self.buffer = self.buffer[frame_length:]
                     if self.porcupine.process(frame) >= 0:
                         print("✅ Wake word detected!")
                         detected = True
@@ -117,35 +108,58 @@ class WakeWordListener:
 
     def detected(self):
         """
-        Runs a single-pass detection cycle and returns True if the wake word is detected.
-        Designed for use by external scripts (e.g., test_full_wakeword.py).
+        Blocking call for background thread:
+        Waits until wake word detected, returns True.
+        Suppresses TTS during detection.
         """
-        print("👂 Waiting for wake word detection (detected() mode)...")
         try:
-            self.run_once()  # internally announces detection
+            if hasattr(self, "speak_alert"):
+                original_speak_alert = self.speak_alert
+                self.speak_alert = lambda *a, **kw: None
+
+            self.run_once()
+
+            if hasattr(self, "speak_alert"):
+                self.speak_alert = original_speak_alert
+
             return True
         except Exception as e:
             print(f"❌ Detection error: {e}")
             return False
 
+    def detected_nonblocking(self, timeout=0.1):
+        """
+        Non-blocking check for wake word.
+        Returns True if detected, False otherwise.
+        """
+        if not self.porcupine:
+            self.porcupine = pvporcupine.create(
+                access_key=PORCUPINE_ACCESS_KEY,
+                keyword_paths=[PORCUPINE_KEYWORD_PATH]
+            )
+            self.audio_queue = queue.Queue()
+            self.stream = sd.InputStream(
+                samplerate=WAKEWORD_SAMPLE_RATE,
+                blocksize=512,
+                dtype='float32',
+                channels=WAKEWORD_CHANNELS,
+                callback=self.audio_callback
+            )
+            self.stream.start()
+            self.buffer = np.zeros((0,), dtype=np.int16)
 
-# === Main function for standalone test ===
-def main():
-    """Speak introduction, listen once for wake word, announce detection, then quit."""
-    tts = AudioController()
-    print("💬 TTS: Buddy Core wake word test starting...")
-    tts.speak(
-        "Buddy Core wake word test starting. "
-        "Say 'Hey Buddy' once to trigger detection."
-    )
+        detected = False
+        try:
+            data = self.audio_queue.get(timeout=timeout)
+            audio_data = (data.flatten() * 32768).astype(np.int16)
+            self.buffer = np.concatenate((self.buffer, audio_data))
+            while len(self.buffer) >= self.porcupine.frame_length:
+                frame = self.buffer[:self.porcupine.frame_length]
+                self.buffer = self.buffer[self.porcupine.frame_length:]
+                if self.porcupine.process(frame) >= 0:
+                    detected = True
+                    break
+        except queue.Empty:
+            pass
 
-    listener = WakeWordListener(audio_controller=tts)
-    listener.run_once()
-
-    print("💬 TTS: Wake word test completed. Goodbye.")
-    tts.speak("Wake word test completed. Goodbye.")
-
-
-# === Script entry point ===
-if __name__ == "__main__":
-    main()
+        return detected

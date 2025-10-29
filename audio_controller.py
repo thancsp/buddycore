@@ -3,7 +3,7 @@ audio_controller.py
 ===================
 Buddy Core AudioController
 
-Provides unified text-to-speech (TTS) via Piper TTS
+Provides interruptible text-to-speech (TTS) via Piper TTS
 and speech-to-text (STT) via Whisper. Configurable
 using parameters from config.py.
 """
@@ -30,7 +30,8 @@ from config import (
 class AudioController:
     """
     === Methods Summary ===
-    speak(text): Convert text to speech using Piper TTS.
+    speak(text): Convert text to speech using Piper TTS (interruptible).
+    stop_speech(): Immediately stops any ongoing TTS playback.
     play_beep(frequency, duration): Play a sine-wave beep.
     record_audio(filename, duration): Record microphone audio to WAV.
     transcribe_audio(filename): Convert recorded audio to text using Whisper.
@@ -42,6 +43,7 @@ class AudioController:
     sample_rate: audio input sampling rate for STT
     channels: audio input channels for STT
     duration: recording duration for STT
+    current_process: reference to current Piper TTS process (for stopping)
     """
 
     def __init__(self, model_path=PIPER_MODEL):
@@ -50,7 +52,7 @@ class AudioController:
         if not os.path.exists(self.model_path):
             raise FileNotFoundError(f"Piper model not found at {self.model_path}")
 
-        # Initialize Whisper model cache as None (lazy loading)
+        # Whisper model cache (lazy loading)
         self.stt_model = None
 
         # Audio configuration for STT
@@ -58,12 +60,15 @@ class AudioController:
         self.channels = STT_CHANNELS
         self.duration = STT_DURATION
 
+        # Reference to currently playing TTS process
+        self.current_process = None
+
     # === Text-to-Speech (TTS) ===
     def speak(self, text: str):
-        """Speak text aloud using Piper TTS."""
+        """Speak text aloud using Piper TTS (interruptible)"""
         try:
             # Start Piper subprocess
-            process = subprocess.Popen(
+            self.current_process = subprocess.Popen(
                 ["piper", "--model", self.model_path, "--output-raw"],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE
@@ -71,15 +76,31 @@ class AudioController:
             # Pipe Piper output to aplay
             play = subprocess.Popen(
                 ["aplay", "-r", "22050", "-f", "S16_LE", "-t", "raw", "-"],
-                stdin=process.stdout
+                stdin=self.current_process.stdout
             )
             # Send text to Piper
-            process.stdin.write(text.encode("utf-8"))
-            process.stdin.close()
-            process.wait()
+            self.current_process.stdin.write(text.encode("utf-8"))
+            self.current_process.stdin.close()
+            self.current_process.wait()
             play.wait()
+            self.current_process = None
         except Exception as e:
             print(f"[AudioController] Piper TTS error: {e}")
+            self.current_process = None
+
+    def stop_speech(self):
+        """Immediately stop ongoing TTS playback"""
+        try:
+            if self.current_process and self.current_process.poll() is None:
+                print("🛑 Stopping current speech...")
+                self.current_process.terminate()  # gentler than kill()
+                time.sleep(0.05)  # give the OS a moment
+                self.current_process.kill()  # force stop if still alive
+            self.current_process = None
+        except Exception as e:
+            print(f"[AudioController] stop_speech() error: {e}")
+            self.current_process = None
+
 
     # === Beep Generator ===
     def play_beep(self, frequency=1000, duration=0.25):
@@ -132,7 +153,6 @@ class AudioController:
     # === Convenience STT Flow ===
     def speak_text_and_transcribe(self):
         """Full STT test: beep -> record -> beep -> transcribe -> speak"""
-        self.speak("Starting speech-to-text test. Please speak after the beep.")
         time.sleep(0.3)
         self.play_beep(1000, 0.25)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmpfile:
@@ -146,6 +166,7 @@ class AudioController:
                 self.speak("I could not hear anything.")
         return text
 
+
 # === Entry Point Main ===
 def main():
     """Run a full STT test with introduction and exit messages"""
@@ -154,6 +175,7 @@ def main():
     time.sleep(0.5)
     ac.speak_text_and_transcribe()
     ac.speak("Buddy Core audio test completed. Goodbye!")
+
 
 # === Script Execution ===
 if __name__ == "__main__":

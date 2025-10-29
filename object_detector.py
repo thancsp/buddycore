@@ -21,6 +21,7 @@ import cv2
 import time
 import threading
 import subprocess
+from datetime import datetime
 from ultralytics import YOLO  # YOLOv11 ONNX detection
 
 from config import CAMERA_RESOLUTION, DETECTOR_TEST_FILENAME, YOLO_MODEL_PATH
@@ -51,12 +52,16 @@ class ObjectDetector:
 
     def detect_frame(self):
         """
-        Capture a frame, run YOLOv11 detection, annotate it, and save.
+        Capture a frame, run YOLOv11 detection, annotate it with bounding boxes
+        and current date/time, and save to OUTPUT folder.
+        
+        If there are 100 files in the OUTPUT folder, the oldest one is deleted.
         
         Returns:
-            annotated_frame (numpy array): Frame with bounding boxes drawn
+            annotated_frame (numpy array): Frame with bounding boxes and timestamp
             detected_labels (list of str): Names of detected objects
         """
+
         # 🔹 Ensure camera is available
         if not self.cam:
             print("❌ Camera not available.")
@@ -71,14 +76,51 @@ class ObjectDetector:
         # 🔹 Run YOLOv11 detection on the captured frame
         results = self.model.predict(source=frame, save=False, show=False)
         annotated_frame = results[0].plot()  # Draw bounding boxes
-        cv2.imwrite(self.output_file, annotated_frame)  # Save annotated frame to file
 
-        # 🔹 Extract detected object names from the YOLO result
+        # 🔹 Annotate with current date and time at top-left
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 1
+        color = (0, 255, 0)  # Green
+        thickness = 2
+        cv2.putText(
+            annotated_frame,
+            timestamp,
+            (10, 30),
+            font,
+            font_scale,
+            color,
+            thickness,
+            cv2.LINE_AA
+        )
+
+        # 🔹 Ensure OUTPUT folder exists
+        output_dir = "OUTPUT"
+        os.makedirs(output_dir, exist_ok=True)
+
+        # 🔹 Check number of files in OUTPUT and remove oldest if ≥100
+        files = [os.path.join(output_dir, f) for f in os.listdir(output_dir) if f.lower().endswith(".jpg")]
+        if len(files) >= 100:
+            oldest_file = min(files, key=os.path.getctime)
+            try:
+                os.remove(oldest_file)
+                print(f"🧹 Removed oldest file: {os.path.basename(oldest_file)}")
+            except Exception as e:
+                print(f"⚠️ Could not remove oldest file: {e}")
+
+        # 🔹 Save annotated frame with timestamped filename
+        filename = f"[DETECTED]{datetime.now().strftime('%Y-%m-%d-%H-%M-%S')}.jpg"
+        self.output_file = os.path.join(output_dir, filename)
+        cv2.imwrite(self.output_file, annotated_frame)
+
+        # 🔹 Extract detected object names from YOLO result
         names = results[0].names
         detected_labels = [names[int(cls)] for cls in results[0].boxes.cls] if len(results[0].boxes) > 0 else []
 
-        print(f"✅ Detection complete. Saved as {self.output_file}")
+        print(f"✅ Detection complete. Saved as {filename}")
         return annotated_frame, detected_labels
+
+
 
     def speak_detections(self, detected_labels):
         """
@@ -90,9 +132,9 @@ class ObjectDetector:
         # 🔹 Prepare TTS message based on detection results
         if detected_labels:
             detected_str = ", ".join(set(detected_labels))  # List unique objects
-            tts_text = f"Buddy Core has detected the following objects: {detected_str}."
+            tts_text = f"{detected_str} detected."
         else:
-            tts_text = "Buddy Core has finished object detection. No recognizable objects were found."
+            tts_text = "Nothing is detected."
 
         # 🔹 Run TTS in background thread to avoid blocking main program
         def tts_thread():
@@ -113,34 +155,8 @@ class ObjectDetector:
         annotated_frame, detected = self.detect_frame()
         if annotated_frame is None:
             return  # Stop if capture failed
-
-        # 🔹 Display image (desktop environment or headless fallback)
-        def show_image():
-            image_path = os.path.abspath(self.output_file)
-            print(f"🖼️ Attempting to display image: {image_path}")
-            try:
-                # If desktop DISPLAY available, use OpenCV
-                if os.environ.get("DISPLAY"):
-                    cv2.imshow("Buddy Core Object Detection", annotated_frame)
-                    cv2.waitKey(15000)  # Display for 15 seconds
-                    cv2.destroyAllWindows()
-                # Headless: try 'feh' image viewer if installed
-                elif subprocess.run(["which", "feh"], capture_output=True).returncode == 0:
-                    subprocess.run(["feh", "-F", "-t", "-Y", image_path])
-                    time.sleep(15)
-                    subprocess.run(["pkill", "-f", self.output_file])
-                else:
-                    print("⚠️ No DISPLAY or feh available. Skipping image display.")
-            except Exception as e:
-                print(f"⚠️ Failed to display image: {e}")
-
-        # 🔹 Run TTS and image display concurrently
-        t1 = threading.Thread(target=self.speak_detections, args=(detected,))
-        t2 = threading.Thread(target=show_image)
-        t1.start()
-        t2.start()
-        t1.join()
-        t2.join()
+        
+        self.speak_detections(detected)
 
         print("✅ Object detection test completed successfully")
 

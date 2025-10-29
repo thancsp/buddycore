@@ -47,7 +47,6 @@ def main():
     while True:
         print(f"\n🎧 Listening for wake word: ['{WAKEWORD_TRIGGER}']...")
         if wake_listener.detected():  # Blocking call until detected
-            print("✅ Wake word detected.")
             time.sleep(0.5)
 
             # === Step 3: Speech-to-Text ===
