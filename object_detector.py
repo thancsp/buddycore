@@ -4,34 +4,37 @@
 # -------------------------------------------------
 # Provides object detection on frames captured from CameraManager
 # and optional TTS announcements using AudioController.
-#
-# === Methods Summary ===
-# - __init__(): Initializes YOLO model, camera, and output file path.
-# - detect_frame(): Captures a frame, runs YOLO detection, annotates, and saves image.
-# - speak_detections(detected_labels): Announces detected objects via TTS.
-# - run_detection_test(): Full detection test that captures frame, detects, displays, and speaks results.
-#
-# === Instance Variables ===
-# - self.model: YOLOv11 ONNX detection model.
-# - self.cam: CameraManager instance for capturing frames.
-# - self.output_file: Filename for saving annotated detection image.
 
-import os
-import cv2
-import time
-import threading
-import subprocess
-from datetime import datetime
-from ultralytics import YOLO  # YOLOv11 ONNX detection
+# ==================
+# Imports Explanation
+# ==================
+import os                # For filesystem operations (folders, file paths, deletion)
+import cv2               # OpenCV library for image processing, drawing, annotation
+import time              # Timing functions, e.g., sleep or timestamps
+import threading         # To run TTS in a non-blocking background thread
+import subprocess        # For running external programs like Piper TTS or aplay
+from datetime import datetime  # To generate timestamped filenames and annotations
+from ultralytics import YOLO    # YOLOv11 ONNX detection library
 
-from config import CAMERA_RESOLUTION, DETECTOR_TEST_FILENAME, YOLO_MODEL_PATH
-from audio_controller import AudioController
-from camera_manager import CameraManager
+from config import CAMERA_RESOLUTION, DETECTOR_TEST_FILENAME, YOLO_MODEL_PATH  # Configurable parameters
+from audio_controller import AudioController   # TTS functionality for speaking detections
+from camera_manager import CameraManager       # Camera capture interface
 
 
 class ObjectDetector:
     """
     Handles YOLOv11 object detection for Buddy Core.
+
+    === Methods Summary ===
+    __init__(): Initializes YOLO model, camera, and output file path.
+    detect_frame(): Captures a frame, runs YOLO detection, annotates, and saves image.
+    speak_detections(detected_labels): Announces detected objects via TTS.
+    run_detection_test(): Full detection test that captures frame, detects, displays, and speaks results.
+
+    === Instance Variables ===
+    self.model: YOLOv11 ONNX detection model.
+    self.cam: CameraManager instance for capturing frames.
+    self.output_file: Filename for saving annotated detection image.
     """
 
     def __init__(self):
@@ -119,8 +122,6 @@ class ObjectDetector:
 
         print(f"✅ Detection complete. Saved as {filename}")
         return annotated_frame, detected_labels
-
-
 
     def speak_detections(self, detected_labels):
         """
