@@ -1,267 +1,173 @@
-# Buddy Core Set Up Manual
+# 🧠 Buddy Core Set Up Manual
 
-Version: 1.2  
-Last Updated: September 23, 2025  
-Note: This version is subject to change. Please check for updates periodically. [https://github.com/thancsp/buddycore/blob/main/SETUP.md](https://github.com/thancsp/buddycore/blob/main/SETUP.md) 
+**Version:** 1.3  
+**Last Updated:** October 31, 2025
+**Note:** This version is subject to change. Please check for updates periodically.  
+🔗 [View on GitHub](https://github.com/thancsp/buddycore/blob/main/SETUP.md)
 
-* * *
+---
 
-## Step 1: Download Raspberry Pi OS
+## 🪜 Step 1: Download Raspberry Pi OS
 
-*   Go to the [Raspberry Pi OS download page](https://www.raspberrypi.com/software/operating-systems/).
-    
-*   Download Raspberry Pi OS 64-bit (Bookworm):
-    
+1. Go to the [Raspberry Pi OS download page](https://www.raspberrypi.com/software/operating-systems/).  
+2. Download **Raspberry Pi OS 64-bit (Bookworm)**.
 
-*   Lite: headless, minimal, recommended for Buddy Core.
-    
-*   Desktop: includes GUI, useful for camera testing.
-    
+---
 
-* * *
+## 💾 Step 2: Flash the SD Card
 
-## Step 2: Flash the SD Card
+1. Go to the [Raspberry Pi Imager page](https://www.raspberrypi.com/software/).  
+2. Download **Raspberry Pi Imager** for your OS (Windows, macOS, or Linux).  
+3. Install Raspberry Pi Imager.  
+4. Insert your **SD card (16GB or larger)**.  
+5. In Raspberry Pi Imager:
+   - **Choose Device →** your Raspberry Pi model  
+   - **Choose OS →** “Raspberry Pi OS (other)” or “Custom (the downloaded OS image)” → **64-bit Bookworm**  
+   - **Choose SD card →** your card  
+   - Click **Write**  
+6. Wait for completion, then **safely eject** the SD card.
 
-1.  Go to the [Raspberry Pi software Page](https://www.raspberrypi.com/software/)
-    
-2.  Download Raspberry Pi Imager for your computer's operating system.
-    
-3.  Install Raspberry Pi Imager on your computer.
-    
-4.  Insert SD card (16GB+ recommended).
-    
-5.  In Raspberry Pi Imager:
-    
+---
 
-*   Choose OS → “Raspberry Pi OS (other)” → 64-bit Bookworm
-    
-*   Choose SD card → your SD card
-    
-*   Click Write
-    
+## ⚙️ Step 3: First Boot & Basic Setup
 
-7.  Wait for completion and safely eject the SD card.
-    
-
-* * *
-
-## Step 3: First Boot & Basic Setup
-
-1.  Insert SD card into the Raspberry Pi Imager and power on.
-    
-2.  Connect to Wi-Fi and ensure date/time is correct.
-    
-3.  Connect to a BlueTooth speaker
-    
-4.  Update the system:
-    
-
-sudo apt update && sudo apt full-upgrade -y
-
-Optional:
-
-5.  Enable Raspberry Pi Connect Run:
-    
-
+1. Insert the SD card into your Raspberry Pi and **power on**.  
+2. Connect to **Wi-Fi** and ensure **date/time** is correct.  
+3. Connect to a **Bluetooth speaker** or audio device.  
+4. Connect a **microphone** (if available).  
+5. Run a full system update:
+```bash
+   sudo apt update && sudo apt full-upgrade -y
+```
+### Optional: Enable Raspberry Pi Connect 
+Run:
+```bash
 rpi-connect on
-
-6.  After starting the service, click the Connect icon in the status bar and select Sign in.
-    
-7.  If you don’t already have Raspberry Pi ID, create one
-    
-8.  After authenticating, assign a name to your device. Choose a name that uniquely identifies the device. Click the Create device and sign in button to continue.
-    
-9.  From now on, the Raspberry Pi will allow you to access remotely from another device with Screen Sharing and SSH
-    
-
+```
+or click the Raspberry Pi Connect in the desktop's status bar then: 
+- Click the Connect icon in the status bar and sign in with your Raspberry Pi ID (create one if you don’t already have).
+- Assign a unique device name and click Create device and sign in.
+From now on, the Raspberry Pi will allow you to access remotely from another device with Screen Sharing and SSH
 * * *
-
-## Step 4: Install Required Packages
-
-1.  Install all system dependencies Buddy Core needs:
-    
-
-sudo apt update && sudo apt full-upgrade -y
-
-sudo apt install -y \\
-
-    git \\
-
-    python3-venv python3-pip \\
-
-    docker.io \\
-
-    bluez pulseaudio pulseaudio-module-bluetooth \\
-
-    alsa-utils libatlas-base-dev libportaudio2 portaudio19-dev \\
-
-    ffmpeg
-
-2.  Enable and start Docker:
-    
-
-sudo systemctl enable docker
-
-sudo systemctl start docker
-
-* * *
-
-## Step 5: Clone Buddy Core Repository
+## 🧩 Step 4: Clone Buddy Core Repository
 
 1.  Navigate to your home directory (Assuming you put Buddy Core in /home/ladmin/):
     
-
+```bash
 cd /home/ladmin/
-
-3.  Clone the repository:
-    
-
+```
+2.  Clone the repository:
+```bash
 git clone https://github.com/thancsp/buddycore.git
-
+```
 * * *
 
-## Step 6: Run setup.sh
+## 📦 Step 5: Install Required Packages
 
-1.  Navigate into Buddy Corefolder:
-    
+First, install all system-level dependencies that Buddy Core needs for audio, Bluetooth, and media handling:
 
+```bash
+sudo apt install -y bluez pulseaudio pulseaudio-module-bluetooth alsa-utils libportaudio2 portaudio19-dev ffmpeg
+```
+Then, install the Python dependencies from the repository’s `requirements.txt` file:
+```bash
 cd ~/buddycore
-
-2.  Make script executable:
-    
-
-chmod +x setup.sh
-
-3.  Run the setup script:
-    
-
-./setup.sh
-
-What this does:
-
-*   Creates a Python virtual environment.
-    
-*   Installs required Python dependencies (OpenCV, TFLite runtime, Piper TTS, etc.).
-    
-*   Configures Bluetooth and audio support.
-    
-*   Installs and runs Rhasspy in Docker for offline wake word detection.
-    
-*   Creates and enables the Buddy Core systemd service.
-    
-
+pip install -r requirements.txt
+```
+This installs all essential Python modules including:
+- OpenCV + Picamera2 for camera handling
+- Ultralytics YOLOv11 + ONNXRuntime for object detection
+- Piper TTS for offline speech output
+- Whisper (STT) for speech-to-text
+- Porcupine for wake-word detection
+- SoundDevice + NumPy for audio I/O
+### 💡 After installation, you can verify everything works with:
+```bash
+python3 -c "import cv2, numpy, sounddevice, whisper, pvporcupine, ultralytics, piper_tts, picamera2, onnxruntime; print('✅ All dependencies OK')"
+```
 * * *
 
-## Step 7: Reboot and Test
+## 🛠️ Step 6: Reboot and Test
 
-1.  Reboot the Pi
-    
+1. Reboot your Raspberry Pi:
 
+```bash
 sudo reboot
-
-2.  On boot, Buddy Core should announce via Bluetooth speaker:
-    
-
-“Buddy Core started”
-
-3.  To monitor log
-    
-
-journalctl -u buddycore.service -f
-
-* * *
-
-## Step 8: Optional Validation
-
-Run individual test scripts to validate each module:
-
-source venv/bin/activate
-
-python3 tests/test\_tts.py
-
-python3 tests/test\_camera.py
-
-python3 tests/test\_detector.py
-
-python3 tests/test\_wake\_word.py
-
-Purpose of each test script:
-
-*   test\_tts.py → Check Piper TTS.
-    
-*   test\_camera.py → Capture frame from Pi Camera.
-    
-*   test\_detector.py → Run object detection (TFLite SSD).
-    
-*   test\_wake\_word.py → Simulate wake word detection.
-    
-
-* * *
-
-## Notes & Tips
-
-### Pi Connect / Remote Access
-
-*   If the Pi doesn’t appear in Pi Connect, check firewall and\*\* Wi-Fi\*\* connectivity.
-    
-*   Ensure your Raspberry Pi ID is correctly signed in.
-    
-
-### Camera Issues
-
-*   Raspberry Pi Camera Module 3 requires libcamera-apps installed.
-    
-*   Test via CLI:
-    
-
-libcamera-still -o test.jpg
-
-*   If you get command not found, reinstall libcamera-apps.
-    
-*   Ensure camera ribbon is properly seated and enabled via raspi-config.
-    
-
-### Piper TTS Issues
-
-*   Piper requires libcap-dev and alsa-utils.
-    
-*   If first word is cut off, use a short prepended space in text input.
-    
-*   Quick test:
-    
-
-python3 -c "import piper\_tts; print('Piper works')"
-
-### Bluetooth Speaker
-
-*   Make sure the speaker is paired manually before running Buddy Core.
-    
-*   PulseAudio and ALSA should be configured for output.
-    
-
-### General Troubleshooting
-
-*   Check logs:
-    
-
-journalctl -u buddy\_core.service -f
-
-*   Activate venv before running test scripts:
-    
-
-source venv/bin/activate
-
-*   If Raspberry Pi Imager has been activated, you should see:
-    
-
-(venv) username@hostname: ~/directory $
-
-  
-
-OR
-
-  
-
+```
+2. After boot, navigate to the Buddy Core directory and create a Python virtual environment:
+```bash
+cd ~/buddycore
+python3 -m venv venv
+```
+💡 After activation, your prompt should show:
+```bash
 (venv) ladmin@rpi: ~/buddycore $
+```
+3. Activate the virtual environment:
+```bash
+source venv/bin/activate
+```
+4. Run `tests/test_launcher.py` to validate each module:
+```bash
+python3 tests/test_launcher.py
+```
 
-At this point, Buddy Core is fully deployed on a fresh Raspberry Pi OS, ready for use by visually impaired users.
+* * *
+## 🏃 Step 7: Run `main.py`
+
+After setting up the virtual environment and installing dependencies, you can run the main Buddy Core program:
+
+```bash
+cd ~/buddycore
+source venv/bin/activate
+python3 main.py
+```
+This will start the full Buddy Core runtime:
+💡 Tip: Keep a terminal open to monitor logs and output while testing.
+* * * 
+## ⚙️ Step 8: Make main.py Auto-Run on Boot
+
+To have Buddy Core start automatically when the Raspberry Pi powers on, create a systemd service:
+
+1. Create the service file:
+```bash
+sudo nano /etc/systemd/system/buddycore.service
+```
+2. Paste the following content (update the paths as necessary):
+```ini
+[Unit]
+Description=Buddy Core Service
+After=network.target
+
+[Service]
+Type=simple
+User=ladmin
+WorkingDirectory=/home/ladmin/buddycore
+ExecStart=/home/ladmin/buddycore/venv/bin/python3 /home/ladmin/buddycore/main.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+3. Reload systemd to recognize the new service:
+```bash
+sudo systemctl daemon-reload
+```
+4. Enable the service to start on boot:
+```bash
+sudo systemctl enable buddycore.service
+```
+5. Start the service immediately (optional):
+```bash
+sudo systemctl start buddycore.service
+```
+6. Check the logs:
+```bash
+journalctl -u buddycore.service -f
+```
+💡 Tip: If you need to stop the service manually, run:
+```bash
+sudo systemctl stop buddycore.service
+```
+* * * 
+
