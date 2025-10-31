@@ -24,7 +24,7 @@
    - **Choose Device →** your Raspberry Pi model  
    - **Choose OS →** “Raspberry Pi OS (other)” or “Custom (the downloaded OS image)” → **64-bit Bookworm**  
    - **Choose SD card →** your card  
-   - Click **Write**  
+   - Click **NEXT**  
 6. Wait for completion, then **safely eject** the SD card.
 
 ---
