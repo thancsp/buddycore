@@ -1,0 +1,23 @@
+# === Buddy Core Dependencies ===
+
+# Core AI & Vision
+ultralytics==8.3.52         # YOLOv11 (ONNX-based object detection)
+onnxruntime==1.18.1         # For YOLO inference on CPU
+opencv-python==4.10.0.84    # Image processing and annotation
+
+# Audio I/O
+sounddevice==0.4.6          # Mic/speaker interface
+numpy==1.26.4               # Required by audio and detection
+piper-tts==1.2.0            # Offline TTS engine (Piper)
+pvporcupine==3.0.3          # Wake word detection (Hey Buddy)
+whisper==1.1.10             # Speech-to-text engine (Whisper)
+torch==2.4.1                # Required by Whisper and YOLOv11
+
+# Raspberry Pi Camera Support
+picamera2==0.3.18           # Official Raspberry Pi camera library
+
+# Utility and multimedia
+ffmpeg-python==0.2.0        # For audio/video conversion (used by Whisper internally)
+
+# Optional: development/testing tools
+pytest>=8.3.0
