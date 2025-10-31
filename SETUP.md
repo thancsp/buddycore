@@ -69,9 +69,11 @@ First, install all system-level dependencies that Buddy Core needs for audio, Bl
 ```bash
 sudo apt install -y bluez pulseaudio pulseaudio-module-bluetooth alsa-utils libportaudio2 portaudio19-dev ffmpeg
 ```
-Then, install the Python dependencies from the repository’s `requirements.txt` file:
+Then, create the python virtual environment (venv), and install the Python dependencies from the repository’s `requirements.txt` file:
 ```bash
 cd ~/buddycore
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 This installs all essential Python modules including:
@@ -94,18 +96,17 @@ python3 -c "import cv2, numpy, sounddevice, whisper, pvporcupine, ultralytics, p
 ```bash
 sudo reboot
 ```
-2. After boot, navigate to the Buddy Core directory and create a Python virtual environment:
+2. After boot, navigate to the Buddy Core directory
 ```bash
 cd ~/buddycore
-python3 -m venv venv
-```
-💡 After activation, your prompt should show:
-```bash
-(venv) ladmin@rpi: ~/buddycore $
 ```
 3. Activate the virtual environment:
 ```bash
 source venv/bin/activate
+```
+💡 After activation, your prompt should show:
+```bash
+(venv) ladmin@rpi: ~/buddycore $
 ```
 4. Run `tests/test_launcher.py` to validate each module:
 ```bash
