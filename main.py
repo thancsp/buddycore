@@ -1,3 +1,4 @@
+
 # ============================================================
 # main.py — Buddy Core Main Runtime Controller
 # ============================================================
@@ -201,27 +202,22 @@ def main():
 
             # On-demand detection in hazard mode
             elif "what is it" in command and current_mode == "Hazard":
-                annotated_frame, detected = detector.detect_frame()
-                if annotated_frame is None:
+                if detected is None:
                     print("⚠️ Buddy Core couldn't detect anything right now.")
-                    audio.speak("Buddy Core couldn't detect anything")
+                    detector.speak_detections(detected)
                 else:
-                    audio.speak(f"The following objects are detected in front of you: {detected}")
+                    detector.speak_detections(detected)
 
         # ---- Periodic automatic detection ----
         annotated_frame, detected = detector.detect_frame()
 
         if current_mode == "Normal":
-            if annotated_frame is not None:
-                print(f"👁️ Detected: {', '.join(detected)}")
-                audio.speak(f"{detected} detected.")
-            else:
-                print("🔍 No objects detected.")
+            detector.speak_detections(detected)
         elif current_mode == "Hazard":
             harzardous = [obj for obj in detected if obj in HARZARDOUS_OBJECTS]
             if harzardous:
                 print(f"⚠️ Hazard detected: {', '.join(harzardous)}")
-                audio.speak(f"Warning! {harzardous} detected ahead.")
+                detector.speak_detections(harzardous)
 
         # Wait between detections
         time.sleep(DETECTION_INTERVAL)
